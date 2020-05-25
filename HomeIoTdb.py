@@ -1,5 +1,7 @@
 import psycopg2
 import datetime
+import ast
+import pandas as pd
 
 class HomeIoT(object):
     def __init__(self, conn):
@@ -59,6 +61,33 @@ class HomeIoT(object):
 
         con.close()
 
+    def get_data(self, sensorname):
+        """
+        Gets the data in the database from the selected sensor.
+        """
+        con = psycopg2.connect(**self.conn)
+        cur = con.cursor()
+
+        q = "SELECT id FROM sensors WHERE name = '{0}'".format(sensorname)
+        cur.execute(q)
+        ids = cur.fetchall()
+
+        if len(ids) == 0:
+            raise Exception('Sensor {0} does not exist in the database. Add it first using method create_new_sensor'.format(sensorname))
+
+        ids = ids[0][0]
+
+        q = "SELECT datatime, value FROM sensordata WHERE sensorid = {0} ORDER BY datatime".format(ids)
+
+        cur.execute(q)
+        data = cur.fetchall()
+
+        data = pd.DataFrame(data, columns = ['datatime', 'value'])
+
+        con.close()
+
+        return data
+
     def _validate_conn(self, conn):
         req = ['host', 'database', 'user', 'password']
 
@@ -71,17 +100,25 @@ class HomeIoT(object):
 
 
 if __name__ == "__main__":
-    conn = {'host': '192.168.1.251'
-            , 'database': 'home'
-            , 'user': 'homeiot'
-            , 'password': 'iotp@ss'}
+    #Inport the connectionstring and cast as a dictionary
+    file = open("../connstr.txt", "r")
+    contents = file.read()
+    conn = ast.literal_eval(contents)
+    file.close()
+
+    #Instantiate the HomeIoT Object
     ht = HomeIoT(conn)
 
+    #Create a new sensor in the database
     ht.create_new_sensor(name = 'temp_study')
 
-
+    #insert some data
     ht.insert_data('temp_study', 44.)
     ht.insert_data('temp_study', 56.)
+
+    #get the data back
+    data = ht.get_data('temp_study')
+    print(data)
 
 
 
